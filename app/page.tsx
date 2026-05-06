@@ -25,6 +25,26 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(h / 24)}d`
 }
 
+function PiIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 18" fill="none">
+      {/* Board body */}
+      <rect x="1" y="3" width="18" height="13" rx="2" stroke={color} strokeWidth="1.4" />
+      {/* GPIO pins */}
+      {[5, 8, 11, 14].map(x => (
+        <line key={x} x1={x} y1="3" x2={x} y2="1" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+      ))}
+      {/* CPU chip */}
+      <rect x="8" y="7" width="5" height="5" rx="0.6" stroke={color} strokeWidth="1.2" />
+      {/* USB ports left */}
+      <rect x="1" y="6.5" width="2.5" height="1.8" rx="0.3" stroke={color} strokeWidth="1" />
+      <rect x="1" y="10" width="2.5" height="1.8" rx="0.3" stroke={color} strokeWidth="1" />
+      {/* SD card right */}
+      <rect x="17" y="8.5" width="2.5" height="2.5" rx="0.3" stroke={color} strokeWidth="1" />
+    </svg>
+  )
+}
+
 // Corner bracket decoration for the upload zone
 function Corner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
   const top = pos.startsWith('t')
@@ -55,13 +75,28 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState('')
   const [feed, setFeed] = useState<MediaItem[]>([])
   const [activatingId, setActivatingId] = useState<string | null>(null)
+  const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'unknown'>('unknown')
   const inputRef = useRef<HTMLInputElement>(null)
   const dragCount = useRef(0)
   const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     loadFeed()
+    checkPiStatus()
+    const interval = setInterval(checkPiStatus, 15000)
+    return () => clearInterval(interval)
   }, [])
+
+  async function checkPiStatus() {
+    const { data } = await supabase
+      .from('pi_status')
+      .select('last_seen')
+      .eq('id', 1)
+      .single()
+    if (!data) { setPiStatus('unknown'); return }
+    const age = (Date.now() - new Date(data.last_seen).getTime()) / 1000
+    setPiStatus(age < 30 ? 'online' : 'offline')
+  }
 
   async function loadFeed() {
     const { data } = await supabase
@@ -210,26 +245,44 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Status indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, paddingTop: 3 }}>
-            <div
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: uiState === 'error' ? 'var(--error)' : uiState === 'uploading' ? 'var(--amber)' : 'var(--success)',
-                boxShadow: uiState === 'error'
-                  ? '0 0 8px var(--error)'
-                  : uiState === 'uploading'
-                  ? '0 0 10px var(--amber)'
-                  : '0 0 7px var(--success)',
-                animation: uiState === 'uploading' ? 'blink 0.55s step-end infinite' : 'none',
-                transition: 'background 0.3s, box-shadow 0.3s',
-              }}
-            />
-            <span className="font-display" style={{ fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              {uiState === 'uploading' ? 'TX' : uiState === 'error' ? 'ERR' : 'RDY'}
-            </span>
+          {/* Right-side indicators */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, paddingTop: 2 }}>
+            {/* Upload status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div
+                style={{
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: uiState === 'error' ? 'var(--error)' : uiState === 'uploading' ? 'var(--amber)' : 'var(--success)',
+                  boxShadow: uiState === 'error' ? '0 0 8px var(--error)' : uiState === 'uploading' ? '0 0 10px var(--amber)' : '0 0 7px var(--success)',
+                  animation: uiState === 'uploading' ? 'blink 0.55s step-end infinite' : 'none',
+                  transition: 'background 0.3s, box-shadow 0.3s',
+                }}
+              />
+              <span className="font-display" style={{ fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                {uiState === 'uploading' ? 'TX' : uiState === 'error' ? 'ERR' : 'RDY'}
+              </span>
+            </div>
+
+            {/* Pi status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <PiIcon
+                size={14}
+                color={
+                  piStatus === 'online' ? 'var(--success)' :
+                  piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)'
+                }
+              />
+              <div style={{
+                width: 5, height: 5, borderRadius: '50%',
+                background: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)',
+                boxShadow: piStatus === 'online' ? '0 0 6px var(--success)' : 'none',
+                animation: piStatus === 'online' ? 'blink 2.5s ease-in-out infinite' : 'none',
+                transition: 'background 0.3s',
+              }} />
+              <span className="font-display" style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                {piStatus === 'online' ? 'LIVE' : piStatus === 'offline' ? 'OFF' : '---'}
+              </span>
+            </div>
           </div>
         </div>
 
