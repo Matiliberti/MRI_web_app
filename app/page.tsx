@@ -1,0 +1,488 @@
+'use client'
+
+import { useState, useRef, useEffect, DragEvent, ChangeEvent } from 'react'
+import { supabase } from '@/lib/supabaseClient'
+
+type UIState = 'idle' | 'dragging' | 'uploading' | 'success' | 'error'
+
+interface MediaItem {
+  id: string
+  file_url: string
+  created_at: string
+}
+
+function isVideoUrl(url: string) {
+  return /\.(mp4|webm|mov|avi|mkv|ogg)(\?|$)/i.test(url)
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'now'
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h`
+  return `${Math.floor(h / 24)}d`
+}
+
+// Corner bracket decoration for the upload zone
+function Corner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
+  const top = pos.startsWith('t')
+  const left = pos.endsWith('l')
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: top ? 12 : undefined,
+        bottom: top ? undefined : 12,
+        left: left ? 12 : undefined,
+        right: left ? undefined : 12,
+        width: 18,
+        height: 18,
+        borderTop: top ? '2px solid var(--amber)' : 'none',
+        borderBottom: top ? 'none' : '2px solid var(--amber)',
+        borderLeft: left ? '2px solid var(--amber)' : 'none',
+        borderRight: left ? 'none' : '2px solid var(--amber)',
+        transition: 'opacity 0.25s ease',
+      }}
+    />
+  )
+}
+
+export default function Home() {
+  const [uiState, setUiState] = useState<UIState>('idle')
+  const [progress, setProgress] = useState(0)
+  const [errorMsg, setErrorMsg] = useState('')
+  const [feed, setFeed] = useState<MediaItem[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dragCount = useRef(0)
+  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    loadFeed()
+  }, [])
+
+  async function loadFeed() {
+    const { data } = await supabase
+      .from('display_media')
+      .select('id, file_url, created_at')
+      .order('created_at', { ascending: false })
+      .limit(9)
+    if (data) setFeed(data)
+  }
+
+  async function uploadFile(file: File) {
+    setUiState('uploading')
+    setProgress(0)
+
+    const ext = file.name.split('.').pop() ?? 'bin'
+    const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    const storagePath = `${uid}.${ext}`
+
+    progressTimer.current = setInterval(() => {
+      setProgress(p => (p >= 80 ? p : p + Math.random() * 14 + 3))
+    }, 280)
+
+    try {
+      const { error: storageErr } = await supabase.storage
+        .from('media')
+        .upload(storagePath, file)
+
+      if (progressTimer.current) clearInterval(progressTimer.current)
+      if (storageErr) throw storageErr
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('media')
+        .getPublicUrl(storagePath)
+
+      const { error: dbErr } = await supabase
+        .from('display_media')
+        .insert({ file_url: publicUrl })
+
+      if (dbErr) throw dbErr
+
+      setProgress(100)
+      setUiState('success')
+      loadFeed()
+      setTimeout(() => { setUiState('idle'); setProgress(0) }, 2600)
+    } catch (err) {
+      if (progressTimer.current) clearInterval(progressTimer.current)
+      setErrorMsg(err instanceof Error ? err.message : 'Upload failed')
+      setUiState('error')
+      setTimeout(() => { setUiState('idle'); setProgress(0) }, 3000)
+    }
+  }
+
+  function onDragEnter(e: DragEvent) {
+    e.preventDefault()
+    dragCount.current++
+    if (uiState === 'idle') setUiState('dragging')
+  }
+  function onDragLeave(e: DragEvent) {
+    e.preventDefault()
+    dragCount.current = Math.max(0, dragCount.current - 1)
+    if (dragCount.current === 0 && uiState === 'dragging') setUiState('idle')
+  }
+  function onDragOver(e: DragEvent) { e.preventDefault() }
+  function onDrop(e: DragEvent) {
+    e.preventDefault()
+    dragCount.current = 0
+    if (uiState !== 'idle' && uiState !== 'dragging') return
+    const file = e.dataTransfer.files?.[0]
+    if (file) uploadFile(file)
+  }
+  function onInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) uploadFile(file)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const canInteract = uiState === 'idle' || uiState === 'dragging'
+
+  const zoneBorder =
+    uiState === 'success' ? 'var(--success)' :
+    uiState === 'error' ? 'var(--error)' :
+    uiState === 'dragging' ? 'var(--amber)' : 'var(--border-hi)'
+
+  const zoneBg =
+    uiState === 'dragging' ? 'rgba(245,158,11,0.04)' :
+    uiState === 'success' ? 'rgba(34,197,94,0.04)' :
+    uiState === 'error' ? 'rgba(239,68,68,0.04)' : 'var(--surface)'
+
+  const zoneShadow =
+    uiState === 'dragging' ? '0 0 70px rgba(245,158,11,0.14),inset 0 0 60px rgba(245,158,11,0.04)' :
+    uiState === 'success' ? '0 0 50px rgba(34,197,94,0.12)' :
+    uiState === 'error' ? '0 0 50px rgba(239,68,68,0.12)' : 'none'
+
+  const circumference = 2 * Math.PI * 34
+
+  return (
+    <main
+      style={{
+        minHeight: '100svh',
+        background: 'var(--bg)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '28px 16px 40px',
+      }}
+    >
+      {/* ── Header ── */}
+      <header style={{ width: '100%', maxWidth: 420, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1
+              className="font-display"
+              style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.28em', color: 'var(--amber)', textTransform: 'uppercase' }}
+            >
+              MRI Display
+            </h1>
+            <p
+              className="font-display"
+              style={{ fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase' }}
+            >
+              Media Feed Controller
+            </p>
+          </div>
+
+          {/* Status indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, paddingTop: 3 }}>
+            <div
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: uiState === 'error' ? 'var(--error)' : uiState === 'uploading' ? 'var(--amber)' : 'var(--success)',
+                boxShadow: uiState === 'error'
+                  ? '0 0 8px var(--error)'
+                  : uiState === 'uploading'
+                  ? '0 0 10px var(--amber)'
+                  : '0 0 7px var(--success)',
+                animation: uiState === 'uploading' ? 'blink 0.55s step-end infinite' : 'none',
+                transition: 'background 0.3s, box-shadow 0.3s',
+              }}
+            />
+            <span className="font-display" style={{ fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              {uiState === 'uploading' ? 'TX' : uiState === 'error' ? 'ERR' : 'RDY'}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 14, height: 1, background: 'var(--border)' }} />
+      </header>
+
+      {/* ── Upload Zone ── */}
+      <div style={{ width: '100%', maxWidth: 420 }}>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*,video/*"
+          onChange={onInputChange}
+          style={{ display: 'none' }}
+          aria-hidden="true"
+        />
+
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Upload file"
+          onClick={() => canInteract && inputRef.current?.click()}
+          onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && canInteract && inputRef.current?.click()}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          style={{
+            position: 'relative',
+            width: '100%',
+            aspectRatio: '1',
+            background: zoneBg,
+            border: `2px dashed ${zoneBorder}`,
+            borderRadius: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: canInteract ? 'pointer' : 'default',
+            transition: 'background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease',
+            boxShadow: zoneShadow,
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            outline: 'none',
+          }}
+        >
+          {/* Corner brackets */}
+          <Corner pos="tl" />
+          <Corner pos="tr" />
+          <Corner pos="bl" />
+          <Corner pos="br" />
+
+          {/* ── Idle ── */}
+          {uiState === 'idle' && (
+            <div className="animate-fade-in" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+              <svg width="54" height="54" viewBox="0 0 54 54" fill="none" opacity={0.55}>
+                <path d="M27 9V39" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" />
+                <path d="M15 21L27 9L39 21" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10 43H44" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.45" />
+                <path d="M17 47H37" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.2" />
+              </svg>
+              <div>
+                <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.32em', color: 'var(--amber)', textTransform: 'uppercase' }}>
+                  Transmit
+                </p>
+                <p className="font-display" style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--text-muted)', marginTop: 7, textTransform: 'uppercase' }}>
+                  tap · drag · drop
+                </p>
+                <p className="font-display" style={{ fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', marginTop: 4, opacity: 0.6 }}>
+                  image or video
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Dragging ── */}
+          {uiState === 'dragging' && (
+            <div className="animate-fade-in" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+              <div
+                style={{
+                  width: 70,
+                  height: 70,
+                  borderRadius: '50%',
+                  border: '2px solid var(--amber)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  animation: 'pulse-ring 1.1s ease-in-out infinite',
+                }}
+              >
+                <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+                  <path d="M15 5V22" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M8 12L15 5L22 12" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <p className="font-display" style={{ fontSize: 11, letterSpacing: '0.3em', color: 'var(--amber)', textTransform: 'uppercase' }}>
+                Release to transmit
+              </p>
+            </div>
+          )}
+
+          {/* ── Uploading ── */}
+          {uiState === 'uploading' && (
+            <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26, width: '100%', padding: '0 64px' }}>
+              {/* SVG circular progress */}
+              <div style={{ position: 'relative' }}>
+                <svg width="84" height="84" viewBox="0 0 84 84">
+                  <circle cx="42" cy="42" r="34" fill="none" stroke="var(--border)" strokeWidth="3" />
+                  <circle
+                    cx="42"
+                    cy="42"
+                    r="34"
+                    fill="none"
+                    stroke="var(--amber)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={circumference * (1 - progress / 100)}
+                    transform="rotate(-90 42 42)"
+                    style={{ transition: 'stroke-dashoffset 0.35s ease' }}
+                  />
+                </svg>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span className="font-display" style={{ fontSize: 14, fontWeight: 600, color: 'var(--amber)' }}>
+                    {Math.round(progress)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Linear bar */}
+              <div style={{ width: '100%' }}>
+                <div style={{ height: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${progress}%`,
+                      background: 'var(--amber)',
+                      transition: 'width 0.35s ease',
+                    }}
+                  />
+                </div>
+                <p className="font-display" style={{ fontSize: 9, letterSpacing: '0.3em', color: 'var(--text-muted)', marginTop: 12, textAlign: 'center', textTransform: 'uppercase' }}>
+                  Transmitting…
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Success ── */}
+          {uiState === 'success' && (
+            <div className="animate-fade-in" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+              <svg width="58" height="58" viewBox="0 0 58 58" fill="none">
+                <circle cx="29" cy="29" r="25" stroke="var(--success)" strokeWidth="2" />
+                <path d="M18 29L25 36L40 21" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.32em', color: 'var(--success)', textTransform: 'uppercase' }}>
+                Transmitted
+              </p>
+            </div>
+          )}
+
+          {/* ── Error ── */}
+          {uiState === 'error' && (
+            <div className="animate-fade-in" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '0 36px' }}>
+              <svg width="58" height="58" viewBox="0 0 58 58" fill="none">
+                <circle cx="29" cy="29" r="25" stroke="var(--error)" strokeWidth="2" />
+                <path d="M29 19V31" stroke="var(--error)" strokeWidth="2" strokeLinecap="round" />
+                <circle cx="29" cy="38" r="2.5" fill="var(--error)" />
+              </svg>
+              <div>
+                <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.3em', color: 'var(--error)', textTransform: 'uppercase' }}>
+                  Signal Lost
+                </p>
+                <p className="font-display" style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 7, letterSpacing: '0.08em', lineHeight: 1.6 }}>
+                  {errorMsg || 'Upload failed — tap to retry'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Recent Feed ── */}
+      {feed.length > 0 && (
+        <section className="animate-slide-up" style={{ width: '100%', maxWidth: 420, marginTop: 30 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <h2
+              className="font-display"
+              style={{ fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+            >
+              Recent Transmissions
+            </h2>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            <span className="font-display" style={{ fontSize: 9, color: 'var(--text-muted)' }}>{feed.length}</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
+            {feed.map((item, i) => (
+              <div
+                key={item.id}
+                style={{
+                  position: 'relative',
+                  aspectRatio: '1',
+                  background: 'var(--surface-2)',
+                  border: `1px solid ${i === 0 ? 'var(--border-hi)' : 'var(--border)'}`,
+                  borderRadius: 3,
+                  overflow: 'hidden',
+                }}
+              >
+                {isVideoUrl(item.file_url) ? (
+                  <video
+                    src={item.file_url}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.file_url}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    loading="lazy"
+                  />
+                )}
+
+                {/* Live indicator on most recent */}
+                {i === 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 5,
+                      right: 5,
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: 'var(--success)',
+                      boxShadow: '0 0 6px var(--success)',
+                    }}
+                  />
+                )}
+
+                {/* Time stamp */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    background: 'linear-gradient(transparent, rgba(7,6,5,0.82))',
+                    padding: '14px 5px 4px',
+                  }}
+                >
+                  <span className="font-display" style={{ fontSize: 8, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)' }}>
+                    {timeAgo(item.created_at)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Footer ── */}
+      <footer style={{ marginTop: 'auto', paddingTop: 36 }}>
+        <p className="font-display" style={{ fontSize: 8, letterSpacing: '0.22em', color: 'var(--border-hi)', textTransform: 'uppercase' }}>
+          v1.0 · Display Feed Controller
+        </p>
+      </footer>
+    </main>
+  )
+}
