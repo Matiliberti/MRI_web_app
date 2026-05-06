@@ -246,40 +246,40 @@ export default function Home() {
           </div>
 
           {/* Right-side indicators */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, paddingTop: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, paddingTop: 2 }}>
             {/* Upload status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div
                 style={{
-                  width: 7, height: 7, borderRadius: '50%',
+                  width: 10, height: 10, borderRadius: '50%',
                   background: uiState === 'error' ? 'var(--error)' : uiState === 'uploading' ? 'var(--amber)' : 'var(--success)',
-                  boxShadow: uiState === 'error' ? '0 0 8px var(--error)' : uiState === 'uploading' ? '0 0 10px var(--amber)' : '0 0 7px var(--success)',
+                  boxShadow: uiState === 'error' ? '0 0 10px var(--error)' : uiState === 'uploading' ? '0 0 12px var(--amber)' : '0 0 9px var(--success)',
                   animation: uiState === 'uploading' ? 'blink 0.55s step-end infinite' : 'none',
                   transition: 'background 0.3s, box-shadow 0.3s',
                 }}
               />
-              <span className="font-display" style={{ fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                 {uiState === 'uploading' ? 'TX' : uiState === 'error' ? 'ERR' : 'RDY'}
               </span>
             </div>
 
             {/* Pi status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <PiIcon
-                size={14}
+                size={20}
                 color={
                   piStatus === 'online' ? 'var(--success)' :
                   piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)'
                 }
               />
               <div style={{
-                width: 5, height: 5, borderRadius: '50%',
+                width: 8, height: 8, borderRadius: '50%',
                 background: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)',
-                boxShadow: piStatus === 'online' ? '0 0 6px var(--success)' : 'none',
+                boxShadow: piStatus === 'online' ? '0 0 9px var(--success)' : 'none',
                 animation: piStatus === 'online' ? 'blink 2.5s ease-in-out infinite' : 'none',
                 transition: 'background 0.3s',
               }} />
-              <span className="font-display" style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.18em', color: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
                 {piStatus === 'online' ? 'LIVE' : piStatus === 'offline' ? 'OFF' : '---'}
               </span>
             </div>
