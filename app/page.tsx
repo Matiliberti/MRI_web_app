@@ -460,7 +460,7 @@ export default function Home() {
               >
                 {isVideoUrl(item.file_url) ? (
                   <video
-                    src={item.file_url}
+                    src={`${item.file_url}#t=0.001`}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     muted
                     playsInline
