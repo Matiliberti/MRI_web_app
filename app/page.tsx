@@ -68,8 +68,16 @@ export default function Home() {
       .from('display_media')
       .select('id, file_url, created_at')
       .order('created_at', { ascending: false })
-      .limit(9)
-    if (data) setFeed(data)
+      .limit(50)
+    if (data) {
+      const seen = new Set<string>()
+      const unique = data.filter(item => {
+        if (seen.has(item.file_url)) return false
+        seen.add(item.file_url)
+        return true
+      })
+      setFeed(unique.slice(0, 9))
+    }
   }
 
   async function setAsActive(item: MediaItem) {
