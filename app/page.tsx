@@ -54,6 +54,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
   const [feed, setFeed] = useState<MediaItem[]>([])
+  const [activatingId, setActivatingId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const dragCount = useRef(0)
   const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -69,6 +70,16 @@ export default function Home() {
       .order('created_at', { ascending: false })
       .limit(9)
     if (data) setFeed(data)
+  }
+
+  async function setAsActive(item: MediaItem) {
+    if (activatingId) return
+    setActivatingId(item.id)
+    const { error } = await supabase
+      .from('display_media')
+      .insert({ file_url: item.file_url })
+    if (!error) await loadFeed()
+    setActivatingId(null)
   }
 
   async function uploadFile(file: File) {
@@ -416,16 +427,27 @@ export default function Home() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
-            {feed.map((item, i) => (
+            {feed.map((item, i) => {
+              const isLive = i === 0
+              const isActivating = activatingId === item.id
+              return (
               <div
                 key={item.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => !isLive && !activatingId && setAsActive(item)}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && !isLive && !activatingId && setAsActive(item)}
                 style={{
                   position: 'relative',
                   aspectRatio: '1',
                   background: 'var(--surface-2)',
-                  border: `1px solid ${i === 0 ? 'var(--border-hi)' : 'var(--border)'}`,
+                  border: `1px solid ${isLive ? 'var(--success)' : 'var(--border)'}`,
                   borderRadius: 3,
                   overflow: 'hidden',
+                  cursor: isLive ? 'default' : 'pointer',
+                  outline: 'none',
+                  boxShadow: isLive ? '0 0 10px rgba(34,197,94,0.15)' : 'none',
+                  transition: 'border-color 0.2s, box-shadow 0.2s',
                 }}
               >
                 {isVideoUrl(item.file_url) ? (
@@ -446,20 +468,60 @@ export default function Home() {
                   />
                 )}
 
-                {/* Live indicator on most recent */}
-                {i === 0 && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 5,
-                      right: 5,
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
+                {/* Tap-to-activate overlay for non-live items */}
+                {!isLive && !isActivating && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'rgba(0,0,0,0)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'background 0.15s',
+                  }}
+                  className="thumb-overlay"
+                  >
+                    <span className="font-display thumb-label" style={{
+                      fontSize: 8, letterSpacing: '0.15em', color: '#fff',
+                      textTransform: 'uppercase', opacity: 0,
+                      transition: 'opacity 0.15s',
+                      background: 'rgba(0,0,0,0.55)',
+                      padding: '3px 6px',
+                      borderRadius: 2,
+                    }}>
+                      Set live
+                    </span>
+                  </div>
+                )}
+
+                {/* Activating spinner */}
+                {isActivating && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: '50%',
+                      border: '2px solid rgba(245,158,11,0.3)',
+                      borderTopColor: 'var(--amber)',
+                      animation: 'spin 0.7s linear infinite',
+                    }} />
+                  </div>
+                )}
+
+                {/* Live badge */}
+                {isLive && (
+                  <div style={{
+                    position: 'absolute', top: 5, right: 5,
+                    display: 'flex', alignItems: 'center', gap: 3,
+                    background: 'rgba(0,0,0,0.55)',
+                    padding: '2px 5px', borderRadius: 2,
+                  }}>
+                    <div style={{
+                      width: 5, height: 5, borderRadius: '50%',
                       background: 'var(--success)',
-                      boxShadow: '0 0 6px var(--success)',
-                    }}
-                  />
+                      boxShadow: '0 0 5px var(--success)',
+                    }} />
+                    <span className="font-display" style={{ fontSize: 7, letterSpacing: '0.15em', color: 'var(--success)' }}>LIVE</span>
+                  </div>
                 )}
 
                 {/* Time stamp */}
@@ -478,7 +540,7 @@ export default function Home() {
                   </span>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </section>
       )}
