@@ -89,7 +89,10 @@ export default function Home() {
         .upload(storagePath, file)
 
       if (progressTimer.current) clearInterval(progressTimer.current)
-      if (storageErr) throw storageErr
+      if (storageErr) {
+        console.error('[storage upload]', storageErr)
+        throw new Error(`Storage: ${storageErr.message}`)
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('media')
@@ -99,7 +102,10 @@ export default function Home() {
         .from('display_media')
         .insert({ file_url: publicUrl })
 
-      if (dbErr) throw dbErr
+      if (dbErr) {
+        console.error('[db insert]', dbErr)
+        throw new Error(`Database: ${dbErr.message}`)
+      }
 
       setProgress(100)
       setUiState('success')
@@ -386,7 +392,7 @@ export default function Home() {
                 <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.3em', color: 'var(--error)', textTransform: 'uppercase' }}>
                   Signal Lost
                 </p>
-                <p className="font-display" style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 7, letterSpacing: '0.08em', lineHeight: 1.6 }}>
+                <p className="font-display" style={{ fontSize: 10, color: '#a09080', marginTop: 7, letterSpacing: '0.05em', lineHeight: 1.6, wordBreak: 'break-word' }}>
                   {errorMsg || 'Upload failed — tap to retry'}
                 </p>
               </div>
