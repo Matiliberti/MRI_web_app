@@ -235,7 +235,7 @@ export default function Home() {
             <img
               src="/logo.png"
               alt="Sedecal"
-              style={{ height: 44, width: 'auto', display: 'block' }}
+              style={{ height: 44, width: 'auto', display: 'block', marginLeft: -7 }}
             />
             <p
               className="font-display"
