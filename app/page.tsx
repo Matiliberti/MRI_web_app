@@ -59,10 +59,10 @@ function Corner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
         right: left ? undefined : 12,
         width: 18,
         height: 18,
-        borderTop: top ? '2px solid var(--amber)' : 'none',
-        borderBottom: top ? 'none' : '2px solid var(--amber)',
-        borderLeft: left ? '2px solid var(--amber)' : 'none',
-        borderRight: left ? 'none' : '2px solid var(--amber)',
+        borderTop: top ? '2px solid var(--accent)' : 'none',
+        borderBottom: top ? 'none' : '2px solid var(--accent)',
+        borderLeft: left ? '2px solid var(--accent)' : 'none',
+        borderRight: left ? 'none' : '2px solid var(--accent)',
         transition: 'opacity 0.25s ease',
       }}
     />
@@ -202,15 +202,15 @@ export default function Home() {
   const zoneBorder =
     uiState === 'success' ? 'var(--success)' :
     uiState === 'error' ? 'var(--error)' :
-    uiState === 'dragging' ? 'var(--amber)' : 'var(--border-hi)'
+    uiState === 'dragging' ? 'var(--accent)' : 'var(--border-hi)'
 
   const zoneBg =
-    uiState === 'dragging' ? 'rgba(245,158,11,0.04)' :
+    uiState === 'dragging' ? 'rgba(0,87,241,0.06)' :
     uiState === 'success' ? 'rgba(34,197,94,0.04)' :
     uiState === 'error' ? 'rgba(239,68,68,0.04)' : 'var(--surface)'
 
   const zoneShadow =
-    uiState === 'dragging' ? '0 0 70px rgba(245,158,11,0.14),inset 0 0 60px rgba(245,158,11,0.04)' :
+    uiState === 'dragging' ? '0 0 70px rgba(0,87,241,0.2),inset 0 0 60px rgba(0,87,241,0.06)' :
     uiState === 'success' ? '0 0 50px rgba(34,197,94,0.12)' :
     uiState === 'error' ? '0 0 50px rgba(239,68,68,0.12)' : 'none'
 
@@ -233,13 +233,13 @@ export default function Home() {
           <div>
             <h1
               className="font-display"
-              style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.28em', color: 'var(--amber)', textTransform: 'uppercase' }}
+              style={{ fontSize: 20, fontWeight: 800, letterSpacing: '0.06em', color: 'var(--text)', textTransform: 'uppercase' }}
             >
               MRI Display
             </h1>
             <p
               className="font-display"
-              style={{ fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase' }}
+              style={{ fontSize: 9, letterSpacing: '0.14em', color: 'var(--accent)', marginTop: 4, textTransform: 'uppercase', fontWeight: 600 }}
             >
               Media Feed Controller
             </p>
@@ -252,13 +252,13 @@ export default function Home() {
               <div
                 style={{
                   width: 10, height: 10, borderRadius: '50%',
-                  background: uiState === 'error' ? 'var(--error)' : uiState === 'uploading' ? 'var(--amber)' : 'var(--success)',
-                  boxShadow: uiState === 'error' ? '0 0 10px var(--error)' : uiState === 'uploading' ? '0 0 12px var(--amber)' : '0 0 9px var(--success)',
+                  background: uiState === 'error' ? 'var(--error)' : uiState === 'uploading' ? 'var(--accent)' : 'var(--success)',
+                  boxShadow: uiState === 'error' ? '0 0 10px var(--error)' : uiState === 'uploading' ? '0 0 12px var(--accent)' : '0 0 9px var(--success)',
                   animation: uiState === 'uploading' ? 'blink 0.55s step-end infinite' : 'none',
                   transition: 'background 0.3s, box-shadow 0.3s',
                 }}
               />
-              <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.04em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                 {uiState === 'uploading' ? 'TX' : uiState === 'error' ? 'ERR' : 'RDY'}
               </span>
             </div>
@@ -279,7 +279,7 @@ export default function Home() {
                 animation: piStatus === 'online' ? 'blink 2.5s ease-in-out infinite' : 'none',
                 transition: 'background 0.3s',
               }} />
-              <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.18em', color: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+              <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.04em', color: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
                 {piStatus === 'online' ? 'LIVE' : piStatus === 'offline' ? 'OFF' : '---'}
               </span>
             </div>
@@ -315,7 +315,7 @@ export default function Home() {
             width: '100%',
             aspectRatio: '1',
             background: zoneBg,
-            border: `2px dashed ${zoneBorder}`,
+            border: `2px solid ${zoneBorder}`,
             borderRadius: 4,
             display: 'flex',
             flexDirection: 'column',
@@ -339,16 +339,16 @@ export default function Home() {
           {uiState === 'idle' && (
             <div className="animate-fade-in" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
               <svg width="54" height="54" viewBox="0 0 54 54" fill="none" opacity={0.55}>
-                <path d="M27 9V39" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" />
-                <path d="M15 21L27 9L39 21" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M10 43H44" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.45" />
-                <path d="M17 47H37" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.2" />
+                <path d="M27 9V39" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+                <path d="M15 21L27 9L39 21" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10 43H44" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.45" />
+                <path d="M17 47H37" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeOpacity="0.2" />
               </svg>
               <div>
-                <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.32em', color: 'var(--amber)', textTransform: 'uppercase' }}>
+                <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--accent)', textTransform: 'uppercase' }}>
                   Transmit
                 </p>
-                <p className="font-display" style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--text-muted)', marginTop: 7, textTransform: 'uppercase' }}>
+                <p className="font-display" style={{ fontSize: 10, letterSpacing: '0.04em', color: 'var(--text-muted)', marginTop: 7, textTransform: 'uppercase' }}>
                   tap · drag · drop
                 </p>
                 <p className="font-display" style={{ fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-muted)', marginTop: 4, opacity: 0.6 }}>
@@ -366,7 +366,7 @@ export default function Home() {
                   width: 70,
                   height: 70,
                   borderRadius: '50%',
-                  border: '2px solid var(--amber)',
+                  border: '2px solid var(--accent)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -374,11 +374,11 @@ export default function Home() {
                 }}
               >
                 <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
-                  <path d="M15 5V22" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M8 12L15 5L22 12" stroke="var(--amber)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M15 5V22" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M8 12L15 5L22 12" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <p className="font-display" style={{ fontSize: 11, letterSpacing: '0.3em', color: 'var(--amber)', textTransform: 'uppercase' }}>
+              <p className="font-display" style={{ fontSize: 11, letterSpacing: '0.07em', color: 'var(--accent)', textTransform: 'uppercase' }}>
                 Release to transmit
               </p>
             </div>
@@ -396,7 +396,7 @@ export default function Home() {
                     cy="42"
                     r="34"
                     fill="none"
-                    stroke="var(--amber)"
+                    stroke="var(--accent)"
                     strokeWidth="3"
                     strokeLinecap="round"
                     strokeDasharray={circumference}
@@ -414,7 +414,7 @@ export default function Home() {
                     justifyContent: 'center',
                   }}
                 >
-                  <span className="font-display" style={{ fontSize: 14, fontWeight: 600, color: 'var(--amber)' }}>
+                  <span className="font-display" style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>
                     {Math.round(progress)}%
                   </span>
                 </div>
@@ -427,12 +427,12 @@ export default function Home() {
                     style={{
                       height: '100%',
                       width: `${progress}%`,
-                      background: 'var(--amber)',
+                      background: 'var(--accent)',
                       transition: 'width 0.35s ease',
                     }}
                   />
                 </div>
-                <p className="font-display" style={{ fontSize: 9, letterSpacing: '0.3em', color: 'var(--text-muted)', marginTop: 12, textAlign: 'center', textTransform: 'uppercase' }}>
+                <p className="font-display" style={{ fontSize: 9, letterSpacing: '0.07em', color: 'var(--text-muted)', marginTop: 12, textAlign: 'center', textTransform: 'uppercase' }}>
                   Transmitting…
                 </p>
               </div>
@@ -446,7 +446,7 @@ export default function Home() {
                 <circle cx="29" cy="29" r="25" stroke="var(--success)" strokeWidth="2" />
                 <path d="M18 29L25 36L40 21" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.32em', color: 'var(--success)', textTransform: 'uppercase' }}>
+              <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--success)', textTransform: 'uppercase' }}>
                 Transmitted
               </p>
             </div>
@@ -461,7 +461,7 @@ export default function Home() {
                 <circle cx="29" cy="38" r="2.5" fill="var(--error)" />
               </svg>
               <div>
-                <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.3em', color: 'var(--error)', textTransform: 'uppercase' }}>
+                <p className="font-display" style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', color: 'var(--error)', textTransform: 'uppercase' }}>
                   Signal Lost
                 </p>
                 <p className="font-display" style={{ fontSize: 10, color: '#a09080', marginTop: 7, letterSpacing: '0.05em', lineHeight: 1.6, wordBreak: 'break-word' }}>
@@ -479,7 +479,7 @@ export default function Home() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <h2
               className="font-display"
-              style={{ fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
+              style={{ fontSize: 9, letterSpacing: '0.05em', color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
             >
               Recent Transmissions
             </h2>
@@ -561,8 +561,8 @@ export default function Home() {
                   }}>
                     <div style={{
                       width: 18, height: 18, borderRadius: '50%',
-                      border: '2px solid rgba(245,158,11,0.3)',
-                      borderTopColor: 'var(--amber)',
+                      border: '2px solid rgba(0,87,241,0.3)',
+                      borderTopColor: 'var(--accent)',
                       animation: 'spin 0.7s linear infinite',
                     }} />
                   </div>
@@ -608,7 +608,7 @@ export default function Home() {
 
       {/* ── Footer ── */}
       <footer style={{ marginTop: 'auto', paddingTop: 36 }}>
-        <p className="font-display" style={{ fontSize: 8, letterSpacing: '0.22em', color: 'var(--border-hi)', textTransform: 'uppercase' }}>
+        <p className="font-display" style={{ fontSize: 8, letterSpacing: '0.05em', color: 'var(--border-hi)', textTransform: 'uppercase' }}>
           v1.0 · Display Feed Controller
         </p>
       </footer>

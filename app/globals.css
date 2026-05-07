@@ -3,16 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --bg: #161412;
-  --surface: #131110;
-  --surface-2: #1a1714;
-  --border: #1e1b18;
-  --border-hi: #332b20;
-  --amber: #f59e0b;
-  --amber-dim: #78490a;
-  --text: #ddd5c8;
-  --text-muted: #4a4038;
-  --success: #22c55e;
+  /* Sedecal brand palette */
+  --bg: #001433;
+  --surface: #001f55;
+  --surface-2: #00174a;
+  --border: #0a2a6a;
+  --border-hi: #1a4499;
+  --accent: #0057F1;
+  --accent-dim: #0035a0;
+  --accent-cyan: #00B9D1;
+  --text: #e0e8ff;
+  --text-muted: #4a6aaa;
+  --success: #00D191;
   --error: #ef4444;
 }
 
@@ -30,7 +32,7 @@ html {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-body), sans-serif;
+  font-family: var(--font-display), sans-serif;
   min-height: 100svh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -45,17 +47,6 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--border-hi);
   border-radius: 2px;
-}
-
-/* Noise texture overlay */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0.35;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
 }
 
 @keyframes blink {
@@ -74,7 +65,7 @@ body::after {
 }
 
 .thumb-overlay:hover {
-  background: rgba(0,0,0,0.4) !important;
+  background: rgba(0,0,0,0.45) !important;
 }
 
 .thumb-overlay:hover .thumb-label {

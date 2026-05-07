@@ -1,18 +1,11 @@
 import type { Metadata, Viewport } from 'next'
-import { Chakra_Petch, Syne } from 'next/font/google'
+import { Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 
-const chakraPetch = Chakra_Petch({
-  weight: ['400', '500', '600', '700'],
+const plusJakarta = Plus_Jakarta_Sans({
+  weight: ['400', '500', '600', '700', '800'],
   subsets: ['latin'],
   variable: '--font-display',
-  display: 'swap',
-})
-
-const syne = Syne({
-  weight: ['400', '500', '600', '700'],
-  subsets: ['latin'],
-  variable: '--font-body',
   display: 'swap',
 })
 
@@ -26,12 +19,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#0a0908',
+  themeColor: '#001433',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${chakraPetch.variable} ${syne.variable}`}>
+    <html lang="en" className={plusJakarta.variable}>
       <body>{children}</body>
     </html>
   )
