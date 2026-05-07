@@ -237,6 +237,12 @@ export default function Home() {
               alt="Sedecal"
               style={{ height: 44, width: 'auto', display: 'block' }}
             />
+            <p
+              className="font-display"
+              style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.7)', marginTop: 6, textTransform: 'uppercase' }}
+            >
+              Display Manager
+            </p>
           </div>
 
           {/* Right-side indicators */}
