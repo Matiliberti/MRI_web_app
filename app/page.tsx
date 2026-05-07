@@ -229,60 +229,56 @@ export default function Home() {
     >
       {/* ── Header ── */}
       <header style={{ width: '100%', maxWidth: 420, marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="Sedecal"
-              style={{ height: 44, width: 'auto', display: 'block', marginLeft: -7 }}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.png"
+          alt="Sedecal"
+          style={{ height: 44, width: 'auto', display: 'block', marginLeft: -14 }}
+        />
+        <p
+          className="font-display"
+          style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.7)', marginTop: 6, textTransform: 'uppercase' }}
+        >
+          Display Manager
+        </p>
+
+        {/* Status indicators — horizontal row below logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 12 }}>
+          {/* Upload status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div
+              style={{
+                width: 10, height: 10, borderRadius: '50%',
+                background: uiState === 'error' ? 'var(--error)' : uiState === 'uploading' ? 'var(--accent)' : 'var(--success)',
+                boxShadow: uiState === 'error' ? '0 0 10px var(--error)' : uiState === 'uploading' ? '0 0 12px var(--accent)' : '0 0 9px var(--success)',
+                animation: uiState === 'uploading' ? 'blink 0.55s step-end infinite' : 'none',
+                transition: 'background 0.3s, box-shadow 0.3s',
+              }}
             />
-            <p
-              className="font-display"
-              style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.7)', marginTop: 6, textTransform: 'uppercase' }}
-            >
-              Display Manager
-            </p>
+            <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.04em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              {uiState === 'uploading' ? 'TX' : uiState === 'error' ? 'ERR' : 'RDY'}
+            </span>
           </div>
 
-          {/* Right-side indicators */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, paddingTop: 2 }}>
-            {/* Upload status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div
-                style={{
-                  width: 10, height: 10, borderRadius: '50%',
-                  background: uiState === 'error' ? 'var(--error)' : uiState === 'uploading' ? 'var(--accent)' : 'var(--success)',
-                  boxShadow: uiState === 'error' ? '0 0 10px var(--error)' : uiState === 'uploading' ? '0 0 12px var(--accent)' : '0 0 9px var(--success)',
-                  animation: uiState === 'uploading' ? 'blink 0.55s step-end infinite' : 'none',
-                  transition: 'background 0.3s, box-shadow 0.3s',
-                }}
-              />
-              <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.04em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                {uiState === 'uploading' ? 'TX' : uiState === 'error' ? 'ERR' : 'RDY'}
-              </span>
-            </div>
+          {/* Divider */}
+          <div style={{ width: 1, height: 14, background: 'var(--border)' }} />
 
-            {/* Pi status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <PiIcon
-                size={20}
-                color={
-                  piStatus === 'online' ? 'var(--success)' :
-                  piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)'
-                }
-              />
-              <div style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)',
-                boxShadow: piStatus === 'online' ? '0 0 9px var(--success)' : 'none',
-                animation: piStatus === 'online' ? 'blink 2.5s ease-in-out infinite' : 'none',
-                transition: 'background 0.3s',
-              }} />
-              <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.04em', color: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
-                {piStatus === 'online' ? 'LIVE' : piStatus === 'offline' ? 'OFF' : '---'}
-              </span>
-            </div>
+          {/* Pi status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <PiIcon
+              size={18}
+              color={piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)'}
+            />
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)',
+              boxShadow: piStatus === 'online' ? '0 0 9px var(--success)' : 'none',
+              animation: piStatus === 'online' ? 'blink 2.5s ease-in-out infinite' : 'none',
+              transition: 'background 0.3s',
+            }} />
+            <span className="font-display" style={{ fontSize: 11, letterSpacing: '0.04em', color: piStatus === 'online' ? 'var(--success)' : piStatus === 'offline' ? 'var(--error)' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+              {piStatus === 'online' ? 'LIVE' : piStatus === 'offline' ? 'OFF' : '---'}
+            </span>
           </div>
         </div>
 
