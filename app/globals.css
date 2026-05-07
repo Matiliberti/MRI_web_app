@@ -4,18 +4,18 @@
 
 :root {
   /* Sedecal brand palette */
-  --bg: #002966;
-  --surface: #001f55;
-  --surface-2: #00174a;
-  --border: #0a2a6a;
-  --border-hi: #1a4499;
-  --accent: #0057F1;
-  --accent-dim: #0035a0;
+  --bg: #0057F1;
+  --surface: rgba(255,255,255,0.1);
+  --surface-2: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.18);
+  --border-hi: rgba(255,255,255,0.38);
+  --accent: #ffffff;
+  --accent-dim: rgba(255,255,255,0.6);
   --accent-cyan: #00B9D1;
-  --text: #e0e8ff;
-  --text-muted: #4a6aaa;
+  --text: #ffffff;
+  --text-muted: rgba(255,255,255,0.55);
   --success: #00D191;
-  --error: #ef4444;
+  --error: #ff6b6b;
 }
 
 *, *::before, *::after {

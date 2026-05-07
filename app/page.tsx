@@ -231,18 +231,12 @@ export default function Home() {
       <header style={{ width: '100%', maxWidth: 420, marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h1
-              className="font-display"
-              style={{ fontSize: 20, fontWeight: 800, letterSpacing: '0.06em', color: 'var(--text)', textTransform: 'uppercase' }}
-            >
-              MRI Display
-            </h1>
-            <p
-              className="font-display"
-              style={{ fontSize: 9, letterSpacing: '0.14em', color: 'var(--accent)', marginTop: 4, textTransform: 'uppercase', fontWeight: 600 }}
-            >
-              Media Feed Controller
-            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="Sedecal"
+              style={{ height: 44, width: 'auto', display: 'block' }}
+            />
           </div>
 
           {/* Right-side indicators */}
