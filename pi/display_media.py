@@ -103,6 +103,7 @@ class Player:
         if self._alive():
             try:
                 self._send({"command": ["loadfile", local_path, "replace"]})
+                self._send({"command": ["set_property", "pause", False]})
                 self._set_loop_for(url)
                 self._current_file = local_path
                 if old_file and old_file != local_path:
