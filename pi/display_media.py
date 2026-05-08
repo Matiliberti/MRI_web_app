@@ -144,8 +144,15 @@ class Player:
             cmd.append("--loop-file=inf")
         else:
             cmd.append("--loop=inf")
+        # Make sure mpv finds the local X display when launched from SSH/systemd
+        env = os.environ.copy()
+        env.setdefault("DISPLAY", ":0")
+        if "XAUTHORITY" not in env:
+            xauth = os.path.expanduser("~/.Xauthority")
+            if os.path.exists(xauth):
+                env["XAUTHORITY"] = xauth
         log.info("Launching mpv: %s", " ".join(cmd))
-        self._proc = subprocess.Popen(cmd)
+        self._proc = subprocess.Popen(cmd, env=env)
         # Wait briefly for the socket to appear so subsequent IPC calls succeed
         for _ in range(20):
             if os.path.exists(self.SOCKET_PATH):
