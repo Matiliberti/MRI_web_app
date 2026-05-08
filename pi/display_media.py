@@ -144,8 +144,11 @@ class Player:
             cmd.append("--loop-file=inf")
         else:
             cmd.append("--loop=inf")
-        # Make sure mpv finds the local X display when launched from SSH/systemd
+        # Make sure mpv finds the local display when launched from SSH/systemd.
+        # Set Wayland and X11 env vars so it works on either compositor.
         env = os.environ.copy()
+        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        env.setdefault("WAYLAND_DISPLAY", "wayland-0")
         env.setdefault("DISPLAY", ":0")
         if "XAUTHORITY" not in env:
             xauth = os.path.expanduser("~/.Xauthority")
