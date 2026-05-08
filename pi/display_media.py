@@ -104,7 +104,6 @@ class Player:
             try:
                 self._send({"command": ["loadfile", local_path, "replace"]})
                 self._send({"command": ["set_property", "pause", False]})
-                self._set_loop_for(url)
                 self._current_file = local_path
                 if old_file and old_file != local_path:
                     try:
@@ -138,12 +137,10 @@ class Player:
             "--keep-open=always",
             "--idle=yes",
             "--image-display-duration=inf",
+            "--loop-file=inf",
+            "--loop=inf",
             f"--input-ipc-server={self.SOCKET_PATH}",
         ]
-        if _is_video(url):
-            cmd.append("--loop-file=inf")
-        else:
-            cmd.append("--loop=inf")
         # Make sure mpv finds the local display when launched from SSH/systemd.
         # Set Wayland and X11 env vars so it works on either compositor.
         env = os.environ.copy()
