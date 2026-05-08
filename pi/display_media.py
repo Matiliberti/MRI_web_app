@@ -7,6 +7,8 @@ downloads and plays it via mpv, then polls for changes.
 import os
 import sys
 import time
+import json
+import socket
 import signal
 import subprocess
 import tempfile
@@ -57,15 +59,15 @@ def _update_heartbeat(supabase: Client) -> None:
         log.debug("Heartbeat upsert failed: %s", exc)
 
 
-def _fetch_latest(supabase: Client) -> Optional[dict]:
+def _fetch_recent(supabase: Client, limit: int = 10) -> list:
     result = (
         supabase.table("display_media")
         .select("id, file_url, created_at")
         .order("created_at", desc=True)
-        .limit(1)
+        .limit(limit)
         .execute()
     )
-    return result.data[0] if result.data else None
+    return result.data or []
 
 
 def _download(url: str) -> str:
@@ -82,32 +84,90 @@ def _download(url: str) -> str:
 
 
 class Player:
-    """Manages a single mpv subprocess, replacing it on each media change."""
+    """Keeps a single mpv process alive and hot-swaps files via the IPC socket
+    so transitions don't expose the desktop."""
+
+    SOCKET_PATH = "/tmp/mpv-display.sock"
 
     def __init__(self):
         self._proc: Optional[subprocess.Popen] = None
         self._current_file: Optional[str] = None
 
+    def _alive(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
+
     def play(self, url: str) -> None:
         local_path = _download(url)
-        self._stop()
+        old_file = self._current_file
 
-        if _is_video(url):
-            extra = ["--loop-file=inf"]
-        else:
-            extra = ["--image-display-duration=inf", "--loop=inf"]
-
-        cmd = ["mpv", local_path, "--fullscreen", "--no-terminal", "--no-osd-bar"] + extra
-        log.info("Launching mpv: %s", " ".join(cmd))
-        self._proc = subprocess.Popen(cmd)
-
-        # Remove previous temp file now that the new one is open
-        if self._current_file:
+        if self._alive():
             try:
-                os.unlink(self._current_file)
+                self._send({"command": ["loadfile", local_path, "replace"]})
+                self._set_loop_for(url)
+                self._current_file = local_path
+                if old_file and old_file != local_path:
+                    try:
+                        os.unlink(old_file)
+                    except OSError:
+                        pass
+                return
+            except Exception as exc:
+                log.warning("IPC swap failed (%s); restarting mpv", exc)
+                self._stop()
+
+        self._launch(local_path, url)
+        self._current_file = local_path
+        if old_file and old_file != local_path:
+            try:
+                os.unlink(old_file)
             except OSError:
                 pass
-        self._current_file = local_path
+
+    def _launch(self, path: str, url: str) -> None:
+        try:
+            os.unlink(self.SOCKET_PATH)
+        except OSError:
+            pass
+        cmd = [
+            "mpv", path,
+            "--fullscreen",
+            "--no-terminal",
+            "--no-osd-bar",
+            "--no-input-default-bindings",
+            "--background=#000000",
+            "--keep-open=always",
+            "--idle=yes",
+            "--image-display-duration=inf",
+            f"--input-ipc-server={self.SOCKET_PATH}",
+        ]
+        if _is_video(url):
+            cmd.append("--loop-file=inf")
+        else:
+            cmd.append("--loop=inf")
+        log.info("Launching mpv: %s", " ".join(cmd))
+        self._proc = subprocess.Popen(cmd)
+        # Wait briefly for the socket to appear so subsequent IPC calls succeed
+        for _ in range(20):
+            if os.path.exists(self.SOCKET_PATH):
+                return
+            time.sleep(0.1)
+
+    def _send(self, command: dict) -> None:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(2.0)
+        try:
+            sock.connect(self.SOCKET_PATH)
+            sock.sendall((json.dumps(command) + "\n").encode("utf-8"))
+        finally:
+            sock.close()
+
+    def _set_loop_for(self, url: str) -> None:
+        if _is_video(url):
+            self._send({"command": ["set_property", "loop-file", "inf"]})
+            self._send({"command": ["set_property", "loop", "no"]})
+        else:
+            self._send({"command": ["set_property", "loop-file", "no"]})
+            self._send({"command": ["set_property", "loop", "inf"]})
 
     def _stop(self) -> None:
         if self._proc and self._proc.poll() is None:
@@ -118,6 +178,10 @@ class Player:
                 self._proc.kill()
                 self._proc.wait()
         self._proc = None
+        try:
+            os.unlink(self.SOCKET_PATH)
+        except OSError:
+            pass
 
     def cleanup(self) -> None:
         self._stop()
@@ -147,11 +211,23 @@ def main() -> None:
     while True:
         try:
             _update_heartbeat(supabase)
-            media = _fetch_latest(supabase)
-            if media and media["id"] != current_id:
-                log.info("New media: %s", media["id"])
-                player.play(media["file_url"])
-                current_id = media["id"]
+            rows = _fetch_recent(supabase)
+
+            for row in rows:
+                if row["id"] == current_id:
+                    break  # already playing the best available file
+                try:
+                    player.play(row["file_url"])
+                except requests.exceptions.HTTPError as exc:
+                    code = exc.response.status_code if exc.response is not None else 0
+                    if 400 <= code < 500:
+                        log.warning("Skipping missing file (HTTP %d): %s", code, row["file_url"])
+                        continue
+                    raise
+                current_id = row["id"]
+                log.info("Now playing: %s", row["id"])
+                break
+
             backoff = POLL_INTERVAL  # reset on success
         except requests.exceptions.RequestException as exc:
             log.warning("Network error (%s); retrying in %ds.", exc, backoff)
