@@ -94,7 +94,18 @@ class Player:
         self._current_file: Optional[str] = None
 
     def _alive(self) -> bool:
-        return self._proc is not None and self._proc.poll() is None
+        """Check if mpv's IPC socket responds — works regardless of how it
+        was launched (setsid -f detaches and our Popen handle is stale)."""
+        if not os.path.exists(self.SOCKET_PATH):
+            return False
+        try:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(0.5)
+            sock.connect(self.SOCKET_PATH)
+            sock.close()
+            return True
+        except (OSError, socket.timeout):
+            return False
 
     def play(self, url: str) -> None:
         local_path = _download(url)
@@ -129,11 +140,13 @@ class Player:
         except OSError:
             pass
         cmd = [
+            "setsid", "-f",
             "mpv", path,
             "--fullscreen",
             "--no-terminal",
             "--no-osd-bar",
             "--no-input-default-bindings",
+            "--gpu-api=opengl",
             "--keep-open=always",
             "--idle=yes",
             "--image-display-duration=inf",
@@ -152,9 +165,9 @@ class Player:
             if os.path.exists(xauth):
                 env["XAUTHORITY"] = xauth
         log.info("Launching mpv: %s", " ".join(cmd))
-        # start_new_session detaches mpv from the controlling SSH/launcher
-        # session — required for Wayland rendering on Pi OS labwc.
-        self._proc = subprocess.Popen(cmd, env=env, start_new_session=True)
+        # `setsid -f` (in cmd) does the right kind of double-fork detach
+        # required for Wayland rendering on Pi OS labwc.
+        self._proc = subprocess.Popen(cmd, env=env)
         # Wait briefly for the socket to appear so subsequent IPC calls succeed
         for _ in range(20):
             if os.path.exists(self.SOCKET_PATH):
@@ -179,13 +192,14 @@ class Player:
             self._send({"command": ["set_property", "loop", "inf"]})
 
     def _stop(self) -> None:
-        if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
+        if self._alive():
             try:
-                self._proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._proc.kill()
-                self._proc.wait()
+                self._send({"command": ["quit"]})
+            except Exception:
+                pass
+            time.sleep(0.5)
+        # Fallback: kill any orphaned mpv detached via setsid
+        subprocess.run(["pkill", "-x", "mpv"], stderr=subprocess.DEVNULL)
         self._proc = None
         try:
             os.unlink(self.SOCKET_PATH)
