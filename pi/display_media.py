@@ -152,7 +152,9 @@ class Player:
             if os.path.exists(xauth):
                 env["XAUTHORITY"] = xauth
         log.info("Launching mpv: %s", " ".join(cmd))
-        self._proc = subprocess.Popen(cmd, env=env)
+        # start_new_session detaches mpv from the controlling SSH/launcher
+        # session — required for Wayland rendering on Pi OS labwc.
+        self._proc = subprocess.Popen(cmd, env=env, start_new_session=True)
         # Wait briefly for the socket to appear so subsequent IPC calls succeed
         for _ in range(20):
             if os.path.exists(self.SOCKET_PATH):
