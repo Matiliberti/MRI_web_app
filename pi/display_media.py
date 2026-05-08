@@ -134,7 +134,6 @@ class Player:
             "--no-terminal",
             "--no-osd-bar",
             "--no-input-default-bindings",
-            "--background=#000000",
             "--keep-open=always",
             "--idle=yes",
             "--image-display-duration=inf",
