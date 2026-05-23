@@ -12,6 +12,7 @@ import time
 import json
 import socket
 import signal
+import shutil
 import subprocess
 import tempfile
 import logging
@@ -78,12 +79,13 @@ def _fetch_recent(supabase: Client, limit: int = 10) -> list:
     return result.data or []
 
 
-def _download(url: str) -> str:
+def _download(url: str, timeout=(15, None)) -> str:
+    """Download url to a temp file. timeout=(connect, read); None = no limit."""
     suffix = _ext(url) or ".bin"
     fd, path = tempfile.mkstemp(suffix=suffix, dir="/tmp")
     os.close(fd)
     log.info("Downloading %s -> %s", url, path)
-    with requests.get(url, stream=True, timeout=30) as resp:
+    with requests.get(url, stream=True, timeout=timeout) as resp:
         resp.raise_for_status()
         with open(path, "wb") as f:
             for chunk in resp.iter_content(chunk_size=65536):
@@ -97,8 +99,8 @@ def _download_to_cache(media_id: str, url: str) -> Path:
     dest = _cached_path(media_id, url)
     if dest.exists():
         return dest
-    tmp = _download(url)
-    Path(tmp).rename(dest)
+    tmp = _download(url, timeout=(15, None))  # no read timeout for large files
+    shutil.move(tmp, dest)
     log.info("Cached %s -> %s", media_id, dest)
     return dest
 
