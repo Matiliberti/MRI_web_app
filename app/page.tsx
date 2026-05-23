@@ -9,6 +9,7 @@ interface MediaItem {
   id: string
   file_url: string
   created_at: string
+  cache_locally: boolean
 }
 
 function isVideoUrl(url: string) {
@@ -75,6 +76,7 @@ export default function Home() {
   const [errorMsg, setErrorMsg] = useState('')
   const [feed, setFeed] = useState<MediaItem[]>([])
   const [activatingId, setActivatingId] = useState<string | null>(null)
+  const [togglingCacheId, setTogglingCacheId] = useState<string | null>(null)
   const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'unknown'>('unknown')
   const inputRef = useRef<HTMLInputElement>(null)
   const dragCount = useRef(0)
@@ -101,7 +103,7 @@ export default function Home() {
   async function loadFeed() {
     const { data } = await supabase
       .from('display_media')
-      .select('id, file_url, created_at')
+      .select('id, file_url, created_at, cache_locally')
       .order('created_at', { ascending: false })
       .limit(50)
     if (data) {
@@ -115,12 +117,23 @@ export default function Home() {
     }
   }
 
+  async function toggleCache(item: MediaItem) {
+    if (togglingCacheId) return
+    setTogglingCacheId(item.id)
+    await supabase
+      .from('display_media')
+      .update({ cache_locally: !item.cache_locally })
+      .eq('id', item.id)
+    await loadFeed()
+    setTogglingCacheId(null)
+  }
+
   async function setAsActive(item: MediaItem) {
     if (activatingId) return
     setActivatingId(item.id)
     const { error } = await supabase
       .from('display_media')
-      .insert({ file_url: item.file_url })
+      .insert({ file_url: item.file_url, cache_locally: item.cache_locally })
     if (!error) await loadFeed()
     setActivatingId(null)
   }
@@ -559,6 +572,37 @@ export default function Home() {
                     }} />
                   </div>
                 )}
+
+                {/* Cache toggle */}
+                <button
+                  onClick={e => { e.stopPropagation(); toggleCache(item) }}
+                  disabled={!!togglingCacheId}
+                  title={item.cache_locally ? 'Remove from Pi cache' : 'Cache on Pi'}
+                  style={{
+                    position: 'absolute', top: 5, left: 5,
+                    width: 22, height: 22,
+                    background: item.cache_locally ? 'var(--accent-cyan)' : 'rgba(0,0,0,0.55)',
+                    border: 'none', borderRadius: 2,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: togglingCacheId === item.id ? 'wait' : 'pointer',
+                    transition: 'background 0.2s',
+                    padding: 0,
+                  }}
+                >
+                  {togglingCacheId === item.id ? (
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      border: '1.5px solid rgba(255,255,255,0.3)',
+                      borderTopColor: '#fff',
+                      animation: 'spin 0.7s linear infinite',
+                    }} />
+                  ) : (
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                      <path d="M5.5 1v6M2.5 4.5L5.5 7.5 8.5 4.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M1 9.5h9" stroke="white" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                  )}
+                </button>
 
                 {/* Live badge */}
                 {isLive && (

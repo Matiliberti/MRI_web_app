@@ -3,6 +3,8 @@
 Raspberry Pi fullscreen media display daemon.
 Connects to Supabase, fetches the latest row from display_media,
 downloads and plays it via mpv, then polls for changes.
+Assets flagged cache_locally are stored in CACHE_DIR and survive reboots.
+Falls back to the most recent cached file when Supabase is unreachable.
 """
 import os
 import sys
@@ -36,6 +38,7 @@ log = logging.getLogger(__name__)
 SUPABASE_URL: str = os.environ["SUPABASE_URL"]
 SUPABASE_KEY: str = os.environ["SUPABASE_KEY"]
 POLL_INTERVAL: int = int(os.getenv("POLL_INTERVAL", "5"))
+CACHE_DIR = Path(os.getenv("CACHE_DIR", "/home/pi/display_media/cache"))
 
 _VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".ts"}
 
@@ -46,6 +49,11 @@ def _ext(url: str) -> str:
 
 def _is_video(url: str) -> bool:
     return _ext(url) in _VIDEO_EXTS
+
+
+def _cached_path(media_id: str, url: str) -> Path:
+    suffix = _ext(url) or ".bin"
+    return CACHE_DIR / f"{media_id}{suffix}"
 
 
 def _update_heartbeat(supabase: Client) -> None:
@@ -62,7 +70,7 @@ def _update_heartbeat(supabase: Client) -> None:
 def _fetch_recent(supabase: Client, limit: int = 10) -> list:
     result = (
         supabase.table("display_media")
-        .select("id, file_url, created_at")
+        .select("id, file_url, created_at, cache_locally")
         .order("created_at", desc=True)
         .limit(limit)
         .execute()
@@ -83,6 +91,26 @@ def _download(url: str) -> str:
     return path
 
 
+def _download_to_cache(media_id: str, url: str) -> Path:
+    """Download to persistent CACHE_DIR. No-op if already cached."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    dest = _cached_path(media_id, url)
+    if dest.exists():
+        return dest
+    tmp = _download(url)
+    Path(tmp).rename(dest)
+    log.info("Cached %s -> %s", media_id, dest)
+    return dest
+
+
+def _find_fallback() -> Optional[str]:
+    """Return the most recently modified file in CACHE_DIR, or None."""
+    if not CACHE_DIR.exists():
+        return None
+    files = sorted(CACHE_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+    return str(files[0]) if files else None
+
+
 class Player:
     """Keeps a single mpv process alive and hot-swaps files via the IPC socket
     so transitions don't expose the desktop."""
@@ -92,10 +120,9 @@ class Player:
     def __init__(self):
         self._proc: Optional[subprocess.Popen] = None
         self._current_file: Optional[str] = None
+        self._current_is_temp: bool = True
 
     def _alive(self) -> bool:
-        """Check if mpv's IPC socket responds — works regardless of how it
-        was launched (setsid -f detaches and our Popen handle is stale)."""
         if not os.path.exists(self.SOCKET_PATH):
             return False
         try:
@@ -107,16 +134,25 @@ class Player:
         except (OSError, socket.timeout):
             return False
 
-    def play(self, url: str) -> None:
-        local_path = _download(url)
+    def play(self, url: str, local_path: Optional[str] = None) -> None:
+        """Play media. Uses local_path if provided and exists, else downloads url."""
+        if local_path and Path(local_path).exists():
+            file_path = local_path
+            is_temp = False
+        else:
+            file_path = _download(url)
+            is_temp = True
+
         old_file = self._current_file
+        old_is_temp = self._current_is_temp
 
         if self._alive():
             try:
-                self._send({"command": ["loadfile", local_path, "replace"]})
+                self._send({"command": ["loadfile", file_path, "replace"]})
                 self._send({"command": ["set_property", "pause", False]})
-                self._current_file = local_path
-                if old_file and old_file != local_path:
+                self._current_file = file_path
+                self._current_is_temp = is_temp
+                if old_is_temp and old_file and old_file != file_path:
                     try:
                         os.unlink(old_file)
                     except OSError:
@@ -126,15 +162,16 @@ class Player:
                 log.warning("IPC swap failed (%s); restarting mpv", exc)
                 self._stop()
 
-        self._launch(local_path, url)
-        self._current_file = local_path
-        if old_file and old_file != local_path:
+        self._launch(file_path)
+        self._current_file = file_path
+        self._current_is_temp = is_temp
+        if old_is_temp and old_file and old_file != file_path:
             try:
                 os.unlink(old_file)
             except OSError:
                 pass
 
-    def _launch(self, path: str, url: str) -> None:
+    def _launch(self, path: str) -> None:
         try:
             os.unlink(self.SOCKET_PATH)
         except OSError:
@@ -154,8 +191,6 @@ class Player:
             "--loop=inf",
             f"--input-ipc-server={self.SOCKET_PATH}",
         ]
-        # Make sure mpv finds the local display when launched from SSH/systemd.
-        # Set Wayland and X11 env vars so it works on either compositor.
         env = os.environ.copy()
         env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
         env.setdefault("WAYLAND_DISPLAY", "wayland-0")
@@ -165,10 +200,7 @@ class Player:
             if os.path.exists(xauth):
                 env["XAUTHORITY"] = xauth
         log.info("Launching mpv: %s", " ".join(cmd))
-        # `setsid -f` (in cmd) does the right kind of double-fork detach
-        # required for Wayland rendering on Pi OS labwc.
         self._proc = subprocess.Popen(cmd, env=env)
-        # Wait briefly for the socket to appear so subsequent IPC calls succeed
         for _ in range(20):
             if os.path.exists(self.SOCKET_PATH):
                 return
@@ -183,14 +215,6 @@ class Player:
         finally:
             sock.close()
 
-    def _set_loop_for(self, url: str) -> None:
-        if _is_video(url):
-            self._send({"command": ["set_property", "loop-file", "inf"]})
-            self._send({"command": ["set_property", "loop", "no"]})
-        else:
-            self._send({"command": ["set_property", "loop-file", "no"]})
-            self._send({"command": ["set_property", "loop", "inf"]})
-
     def _stop(self) -> None:
         if self._alive():
             try:
@@ -198,7 +222,6 @@ class Player:
             except Exception:
                 pass
             time.sleep(0.5)
-        # Fallback: kill any orphaned mpv detached via setsid
         subprocess.run(["pkill", "-x", "mpv"], stderr=subprocess.DEVNULL)
         self._proc = None
         try:
@@ -208,7 +231,7 @@ class Player:
 
     def cleanup(self) -> None:
         self._stop()
-        if self._current_file:
+        if self._current_file and self._current_is_temp:
             try:
                 os.unlink(self._current_file)
             except OSError:
@@ -220,6 +243,7 @@ def main() -> None:
     player = Player()
     current_id: Optional[str] = None
     backoff = POLL_INTERVAL
+    fallback_played = False
 
     def _shutdown(sig, _frame):
         log.info("Signal %d received, shutting down.", sig)
@@ -238,27 +262,59 @@ def main() -> None:
 
             for row in rows:
                 if row["id"] == current_id:
-                    break  # already playing the best available file
+                    # Still on current item — ensure it gets cached if newly flagged
+                    if row.get("cache_locally"):
+                        cached = _cached_path(row["id"], row["file_url"])
+                        if not cached.exists():
+                            try:
+                                _download_to_cache(row["id"], row["file_url"])
+                            except Exception as exc:
+                                log.warning("Background cache failed: %s", exc)
+                    break
+
+                # New item — ensure cached if flagged before playing
+                if row.get("cache_locally"):
+                    try:
+                        _download_to_cache(row["id"], row["file_url"])
+                    except Exception as exc:
+                        log.warning("Cache download failed for %s: %s", row["id"], exc)
+
+                cached = _cached_path(row["id"], row["file_url"])
+                local = str(cached) if cached.exists() else None
+
                 try:
-                    player.play(row["file_url"])
+                    player.play(row["file_url"], local_path=local)
                 except requests.exceptions.HTTPError as exc:
                     code = exc.response.status_code if exc.response is not None else 0
                     if 400 <= code < 500:
                         log.warning("Skipping missing file (HTTP %d): %s", code, row["file_url"])
                         continue
                     raise
+
                 current_id = row["id"]
-                log.info("Now playing: %s", row["id"])
+                fallback_played = False
+                log.info("Now playing: %s (cached=%s)", row["id"], local is not None)
                 break
 
-            backoff = POLL_INTERVAL  # reset on success
-        except requests.exceptions.RequestException as exc:
-            log.warning("Network error (%s); retrying in %ds.", exc, backoff)
+            backoff = POLL_INTERVAL
+
+        except Exception as exc:
+            log.warning("Fetch error (%s); retrying in %ds.", exc, backoff)
+
+            # On first failure with nothing playing, fall back to local cache
+            if current_id is None and not fallback_played:
+                fallback = _find_fallback()
+                if fallback:
+                    log.info("Playing cached fallback: %s", fallback)
+                    try:
+                        player.play("", local_path=fallback)
+                        fallback_played = True
+                    except Exception as fe:
+                        log.warning("Fallback playback failed: %s", fe)
+
             time.sleep(backoff)
             backoff = min(backoff * 2, 60)
             continue
-        except Exception as exc:
-            log.error("Unexpected error: %s", exc, exc_info=True)
 
         time.sleep(POLL_INTERVAL)
 
