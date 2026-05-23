@@ -167,7 +167,7 @@ export default function Home() {
 
       const { error: dbErr } = await supabase
         .from('display_media')
-        .insert({ file_url: publicUrl })
+        .insert({ file_url: publicUrl, cache_locally: true })
 
       if (dbErr) {
         console.error('[db insert]', dbErr)
