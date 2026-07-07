@@ -10,6 +10,7 @@ interface MediaItem {
   file_url: string
   created_at: string
   cache_locally: boolean
+  pi_downloaded_at: string | null
 }
 
 function isVideoUrl(url: string) {
@@ -46,6 +47,22 @@ function PiIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: 
   )
 }
 
+function VolumeIcon({ size = 16, color = 'currentColor', muted = false }: { size?: number; color?: string; muted?: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <path d="M3 7.5h3L10.5 4v12L6 12.5H3z" fill={color} stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
+      {muted ? (
+        <path d="M14 8l4 4M18 8l-4 4" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+      ) : (
+        <>
+          <path d="M13.5 7.5a3.5 3.5 0 0 1 0 5" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M15.5 5.5a6 6 0 0 1 0 9" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+        </>
+      )}
+    </svg>
+  )
+}
+
 // Corner bracket decoration for the upload zone
 function Corner({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
   const top = pos.startsWith('t')
@@ -78,16 +95,41 @@ export default function Home() {
   const [activatingId, setActivatingId] = useState<string | null>(null)
   const [togglingCacheId, setTogglingCacheId] = useState<string | null>(null)
   const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'unknown'>('unknown')
+  const [volume, setVolume] = useState(100)
   const inputRef = useRef<HTMLInputElement>(null)
   const dragCount = useRef(0)
   const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const volumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     loadFeed()
     checkPiStatus()
-    const interval = setInterval(checkPiStatus, 15000)
+    loadSettings()
+    const interval = setInterval(() => { checkPiStatus(); loadFeed() }, 15000)
     return () => clearInterval(interval)
   }, [])
+
+  async function loadSettings() {
+    const { data } = await supabase
+      .from('pi_settings')
+      .select('volume')
+      .eq('id', 1)
+      .single()
+    if (data && typeof data.volume === 'number') {
+      setVolume(Math.round(data.volume * 100))
+    }
+  }
+
+  // Slider moves instantly (local state); the DB write is debounced so a drag
+  // doesn't fire dozens of updates the Pi would have to churn through.
+  function onVolumeChange(e: ChangeEvent<HTMLInputElement>) {
+    const pct = Number(e.target.value)
+    setVolume(pct)
+    if (volumeTimer.current) clearTimeout(volumeTimer.current)
+    volumeTimer.current = setTimeout(() => {
+      supabase.from('pi_settings').update({ volume: pct / 100 }).eq('id', 1)
+    }, 250)
+  }
 
   async function checkPiStatus() {
     const { data } = await supabase
@@ -97,13 +139,14 @@ export default function Home() {
       .single()
     if (!data) { setPiStatus('unknown'); return }
     const age = (Date.now() - new Date(data.last_seen).getTime()) / 1000
-    setPiStatus(age < 30 ? 'online' : 'offline')
+    // Heartbeat writes every ~60s; 90s gives headroom for jitter/backoff.
+    setPiStatus(age < 90 ? 'online' : 'offline')
   }
 
   async function loadFeed() {
     const { data } = await supabase
       .from('display_media')
-      .select('id, file_url, created_at, cache_locally')
+      .select('id, file_url, created_at, cache_locally, pi_downloaded_at')
       .order('created_at', { ascending: false })
       .limit(50)
     if (data) {
@@ -293,6 +336,28 @@ export default function Home() {
 
         <div style={{ marginTop: 14, height: 1, background: 'var(--border)' }} />
       </header>
+
+      {/* ── Volume ── */}
+      <div style={{ width: '100%', maxWidth: 420, marginBottom: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <VolumeIcon size={16} color={volume === 0 ? 'var(--text-muted)' : 'var(--accent)'} muted={volume === 0} />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={volume}
+            onChange={onVolumeChange}
+            aria-label="Display volume"
+            style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer', height: 4 }}
+          />
+          <span
+            className="font-display"
+            style={{ fontSize: 10, letterSpacing: '0.04em', color: 'var(--text-muted)', minWidth: 30, textAlign: 'right' }}
+          >
+            {volume}%
+          </span>
+        </div>
+      </div>
 
       {/* ── Upload Zone ── */}
       <div style={{ width: '100%', maxWidth: 420 }}>
@@ -618,6 +683,25 @@ export default function Home() {
                       boxShadow: '0 0 5px var(--success)',
                     }} />
                     <span className="font-display" style={{ fontSize: 7, letterSpacing: '0.15em', color: 'var(--success)' }}>LIVE</span>
+                  </div>
+                )}
+
+                {/* Received-by-Pi badge */}
+                {item.pi_downloaded_at && (
+                  <div
+                    title={`Received by Pi · ${timeAgo(item.pi_downloaded_at)} ago`}
+                    style={{
+                      position: 'absolute', bottom: 4, right: 5,
+                      display: 'flex', alignItems: 'center', gap: 3,
+                      background: 'rgba(0,0,0,0.55)',
+                      padding: '2px 4px', borderRadius: 2,
+                      zIndex: 1,
+                    }}
+                  >
+                    <PiIcon size={9} color="var(--success)" />
+                    <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                      <path d="M1.5 5.2 4 7.5 8.5 2.5" stroke="var(--success)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </div>
                 )}
 

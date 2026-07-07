@@ -39,6 +39,7 @@ log = logging.getLogger(__name__)
 SUPABASE_URL: str = os.environ["SUPABASE_URL"]
 SUPABASE_KEY: str = os.environ["SUPABASE_KEY"]
 POLL_INTERVAL: int = int(os.getenv("POLL_INTERVAL", "5"))
+HEARTBEAT_INTERVAL: int = int(os.getenv("HEARTBEAT_INTERVAL", "60"))
 CACHE_DIR = Path(os.getenv("CACHE_DIR", "/home/pi/display_media/cache"))
 
 _VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".ts"}
@@ -66,6 +67,51 @@ def _update_heartbeat(supabase: Client) -> None:
         }).execute()
     except Exception as exc:
         log.debug("Heartbeat upsert failed: %s", exc)
+
+
+def _mark_downloaded(supabase: Client, media_id: str) -> None:
+    """Flag that this asset's bytes reached the Pi and started playing."""
+    try:
+        supabase.table("display_media").update({
+            "pi_downloaded_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", media_id).execute()
+    except Exception as exc:
+        log.debug("Download ack failed for %s: %s", media_id, exc)
+
+
+def _fetch_volume(supabase: Client) -> Optional[float]:
+    """Read the desired output volume (0.0–1.0) set from the web app."""
+    try:
+        result = (
+            supabase.table("pi_settings")
+            .select("volume")
+            .eq("id", 1)
+            .single()
+            .execute()
+        )
+        if result.data and result.data.get("volume") is not None:
+            return float(result.data["volume"])
+    except Exception as exc:
+        log.debug("Volume fetch failed: %s", exc)
+    return None
+
+
+def _apply_volume(value: float) -> None:
+    """Set the default PipeWire sink (the WM8960) volume via wpctl. Clamped to
+    [0.0, 1.0] — above unity PipeWire applies digital gain that clips."""
+    v = max(0.0, min(1.0, value))
+    env = os.environ.copy()
+    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    try:
+        subprocess.run(
+            ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{v:.3f}"],
+            env=env,
+            check=True,
+            stderr=subprocess.DEVNULL,
+        )
+        log.info("Applied output volume: %.0f%%", v * 100)
+    except Exception as exc:
+        log.warning("Failed to set volume %.2f: %s", v, exc)
 
 
 def _fetch_recent(supabase: Client, limit: int = 10) -> list:
@@ -97,10 +143,15 @@ def _download_to_cache(media_id: str, url: str) -> Path:
     """Download to persistent CACHE_DIR. No-op if already cached."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest = _cached_path(media_id, url)
-    if dest.exists():
+    if dest.exists() and dest.stat().st_size > 0:
         return dest
+    if dest.exists():
+        dest.unlink()
     tmp = _download(url, timeout=(15, None))  # no read timeout for large files
     shutil.move(tmp, dest)
+    if dest.stat().st_size == 0:
+        dest.unlink()
+        raise ValueError(f"Downloaded file is empty: {url}")
     log.info("Cached %s -> %s", media_id, dest)
     return dest
 
@@ -137,8 +188,8 @@ class Player:
             return False
 
     def play(self, url: str, local_path: Optional[str] = None) -> None:
-        """Play media. Uses local_path if provided and exists, else downloads url."""
-        if local_path and Path(local_path).exists():
+        """Play media. Uses local_path if provided and non-empty, else downloads url."""
+        if local_path and Path(local_path).exists() and Path(local_path).stat().st_size > 0:
             file_path = local_path
             is_temp = False
         else:
@@ -192,6 +243,7 @@ class Player:
             "--loop-file=inf",
             "--loop=inf",
             f"--input-ipc-server={self.SOCKET_PATH}",
+            "--log-file=/tmp/mpv.log",
         ]
         env = os.environ.copy()
         env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
@@ -246,6 +298,8 @@ def main() -> None:
     current_id: Optional[str] = None
     backoff = POLL_INTERVAL
     fallback_played = False
+    last_heartbeat = 0.0
+    last_volume: Optional[float] = None
 
     def _shutdown(sig, _frame):
         log.info("Signal %d received, shutting down.", sig)
@@ -258,8 +312,22 @@ def main() -> None:
     log.info("Started. Polling every %ds.", POLL_INTERVAL)
 
     while True:
-        try:
+        # Heartbeat on its own cadence, independent of the media poll and of
+        # fetch failures/backoff — its only job is to prove the Pi is alive.
+        if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
             _update_heartbeat(supabase)
+            last_heartbeat = time.time()
+
+        try:
+            # Apply any volume change requested from the web app. Only calls
+            # wpctl when the value actually changed, so it never spams the mixer.
+            desired_vol = _fetch_volume(supabase)
+            if desired_vol is not None and (
+                last_volume is None or abs(desired_vol - last_volume) > 0.001
+            ):
+                _apply_volume(desired_vol)
+                last_volume = desired_vol
+
             rows = _fetch_recent(supabase)
 
             for row in rows:
@@ -295,6 +363,7 @@ def main() -> None:
 
                 current_id = row["id"]
                 fallback_played = False
+                _mark_downloaded(supabase, row["id"])
                 log.info("Now playing: %s (cached=%s)", row["id"], local is not None)
                 break
 
