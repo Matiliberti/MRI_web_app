@@ -7,7 +7,7 @@ type UIState = 'idle' | 'dragging' | 'uploading' | 'success' | 'error'
 
 // Slider 100% maps to this raw PipeWire gain. >1.0 is digital over-amplification
 // (louder than unity, at the cost of clipping on already-loud content).
-const MAX_VOL = 2.5
+const MAX_VOL = 2.0
 
 interface MediaItem {
   id: string
