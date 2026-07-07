@@ -98,6 +98,7 @@ export default function Home() {
   const [feed, setFeed] = useState<MediaItem[]>([])
   const [activatingId, setActivatingId] = useState<string | null>(null)
   const [togglingCacheId, setTogglingCacheId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'unknown'>('unknown')
   const [volume, setVolume] = useState(100)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -194,6 +195,44 @@ export default function Home() {
       .eq('id', item.id)
     await loadFeed()
     setTogglingCacheId(null)
+  }
+
+  async function deleteItem(item: MediaItem) {
+    if (deletingId) return
+    if (!window.confirm('Delete this file? Removes it from the feed and from Storage.')) return
+    setDeletingId(item.id)
+
+    // Delete ALL rows for this file_url so duplicate "Set live" entries go too.
+    // .select() returns what was actually removed — empty means RLS blocked it.
+    const { data: removed, error: dbErr } = await supabase
+      .from('display_media')
+      .delete()
+      .eq('file_url', item.file_url)
+      .select()
+
+    if (dbErr) {
+      console.error('[delete failed]', dbErr.message, dbErr)
+      window.alert(`Delete failed: ${dbErr.message}`)
+      setDeletingId(null)
+      return
+    }
+    if (!removed || removed.length === 0) {
+      console.warn('[delete] 0 rows removed — display_media needs an RLS DELETE policy for anon')
+      window.alert('Nothing was deleted — the database is blocking deletes (missing RLS DELETE policy on display_media).')
+      setDeletingId(null)
+      return
+    }
+
+    // Best-effort: remove the underlying Storage object too. The feed is already
+    // cleared by the row delete, so a blocked Storage delete is non-fatal.
+    const path = item.file_url.split('/object/public/media/')[1]
+    if (path) {
+      const { error: stErr } = await supabase.storage.from('media').remove([decodeURIComponent(path)])
+      if (stErr) console.warn('[storage delete blocked]', stErr.message)
+    }
+
+    await loadFeed()
+    setDeletingId(null)
   }
 
   async function setAsActive(item: MediaItem) {
@@ -690,6 +729,36 @@ export default function Home() {
                     <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
                       <path d="M5.5 1v6M2.5 4.5L5.5 7.5 8.5 4.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
                       <path d="M1 9.5h9" stroke="white" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                  )}
+                </button>
+
+                {/* Delete */}
+                <button
+                  onClick={e => { e.stopPropagation(); deleteItem(item) }}
+                  disabled={!!deletingId}
+                  title="Delete file (feed + Storage)"
+                  style={{
+                    position: 'absolute', top: 5, left: 32,
+                    width: 22, height: 22,
+                    background: 'rgba(0,0,0,0.55)',
+                    border: 'none', borderRadius: 2,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: deletingId === item.id ? 'wait' : 'pointer',
+                    transition: 'background 0.2s',
+                    padding: 0,
+                  }}
+                >
+                  {deletingId === item.id ? (
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      border: '1.5px solid rgba(255,255,255,0.3)',
+                      borderTopColor: '#fff',
+                      animation: 'spin 0.7s linear infinite',
+                    }} />
+                  ) : (
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                      <path d="M2.8 2.8l5.4 5.4M8.2 2.8l-5.4 5.4" stroke="var(--error)" strokeWidth="1.5" strokeLinecap="round" />
                     </svg>
                   )}
                 </button>
