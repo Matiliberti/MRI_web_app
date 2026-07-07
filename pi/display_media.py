@@ -98,8 +98,9 @@ def _fetch_volume(supabase: Client) -> Optional[float]:
 
 def _apply_volume(value: float) -> None:
     """Set the default PipeWire sink (the WM8960) volume via wpctl. Clamped to
-    [0.0, 1.0] — above unity PipeWire applies digital gain that clips."""
-    v = max(0.0, min(1.0, value))
+    [0.0, 2.5]. Above 1.0 is digital over-amplification: louder than unity, but
+    it clips on content that's already near full scale."""
+    v = max(0.0, min(2.5, value))
     env = os.environ.copy()
     env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
     try:

@@ -5,6 +5,10 @@ import { supabase } from '@/lib/supabaseClient'
 
 type UIState = 'idle' | 'dragging' | 'uploading' | 'success' | 'error'
 
+// Slider 100% maps to this raw PipeWire gain. >1.0 is digital over-amplification
+// (louder than unity, at the cost of clipping on already-loud content).
+const MAX_VOL = 2.5
+
 interface MediaItem {
   id: string
   file_url: string
@@ -116,7 +120,8 @@ export default function Home() {
       .eq('id', 1)
       .single()
     if (data && typeof data.volume === 'number') {
-      setVolume(Math.round(data.volume * 100))
+      // Stored volume is a raw PipeWire gain (0..MAX_VOL); show it as 0..100%.
+      setVolume(Math.round((data.volume / MAX_VOL) * 100))
     }
   }
 
@@ -126,8 +131,18 @@ export default function Home() {
     const pct = Number(e.target.value)
     setVolume(pct)
     if (volumeTimer.current) clearTimeout(volumeTimer.current)
-    volumeTimer.current = setTimeout(() => {
-      supabase.from('pi_settings').update({ volume: pct / 100 }).eq('id', 1)
+    volumeTimer.current = setTimeout(async () => {
+      // 0% -> 0.0, 100% -> MAX_VOL (2.5). Above 1.0 is digital gain on the Pi.
+      const gain = (pct / 100) * MAX_VOL
+      // .select() returns the rows actually written — empty means RLS silently
+      // blocked the UPDATE (PostgREST doesn't error on a zero-row update).
+      const { data, error } = await supabase
+        .from('pi_settings')
+        .update({ volume: gain })
+        .eq('id', 1)
+        .select()
+      if (error) console.error('[volume update failed]', error.message, error)
+      else if (!data || data.length === 0) console.warn('[volume update] 0 rows changed — RLS UPDATE policy is blocking anon writes to pi_settings')
     }, 250)
   }
 
