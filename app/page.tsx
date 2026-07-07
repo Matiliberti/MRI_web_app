@@ -14,7 +14,7 @@ interface MediaItem {
   file_url: string
   created_at: string
   cache_locally: boolean
-  pi_downloaded_at: string | null
+  pi_downloaded_at?: string | null
 }
 
 function isVideoUrl(url: string) {
@@ -159,11 +159,21 @@ export default function Home() {
   }
 
   async function loadFeed() {
-    const { data } = await supabase
+    // Try to include pi_downloaded_at (drives the "Received by Pi" badge). If
+    // that column hasn't been added to the DB yet the query errors, so fall
+    // back to the core columns — the feed must render either way.
+    let { data, error } = await supabase
       .from('display_media')
       .select('id, file_url, created_at, cache_locally, pi_downloaded_at')
       .order('created_at', { ascending: false })
       .limit(50)
+    if (error) {
+      ({ data } = await supabase
+        .from('display_media')
+        .select('id, file_url, created_at, cache_locally')
+        .order('created_at', { ascending: false })
+        .limit(50))
+    }
     if (data) {
       const seen = new Set<string>()
       const unique = data.filter(item => {
