@@ -1,29 +1,29 @@
 # MRI Display — Web App
 
-Upload images and videos from your phone or browser. The Raspberry Pi polls the `display_media` table and shows the latest file.
+Upload images and videos from your phone or browser. Each Raspberry Pi polls its own media table and shows the latest file.
+
+## Two independent displays, one deployment
+
+| Display | Web URL (same Vercel project) | Feed table        | Pi kit            |
+|--------:|-------------------------------|-------------------|-------------------|
+| 1       | `/`                           | `display_media`   | `pi/display-1/`   |
+| 2       | `/display-2`                  | `display_media_2` | `pi/display-2/`   |
+
+Display config lives in `lib/displays.ts`; the shared UI is `components/DisplayApp.tsx`.
+Each Pi is told which display it is by `DISPLAY_ID` in its `.env` — see `pi/README.md`.
+To add a display 3: add an entry in `lib/displays.ts`, a route folder `app/display-3/`,
+a SQL file like `supabase/002_add_display_2.sql`, and a `pi/display-3/` folder.
 
 ---
 
 ## 1. Supabase Setup
 
-### Database table
+### Database tables
 
-Run this in the **Supabase SQL Editor** (Dashboard → SQL Editor → New query):
+SQL lives in `supabase/`. Run in **Supabase Dashboard → SQL Editor → New query**:
 
-```sql
--- Table
-CREATE TABLE display_media (
-  id         UUID                     DEFAULT gen_random_uuid() PRIMARY KEY,
-  file_url   TEXT                     NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Allow public read/write (no auth needed for a private 2-person tool)
-ALTER TABLE display_media ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "public_all" ON display_media
-  FOR ALL USING (true) WITH CHECK (true);
-```
+- `001_schema_display_1.sql` — the original schema (already applied in production; reference only / rebuild from scratch).
+- `002_add_display_2.sql` — additive migration that adds display 2. Safe to run on the live project.
 
 ### Storage bucket
 
@@ -83,4 +83,4 @@ Or connect the repo in the Vercel web UI — it auto-detects Next.js and deploys
 | Row inserted | `display_media` gets `{ file_url, created_at }` |
 | Pi polls the table | Pi fetches the latest row and displays that URL |
 
-The Pi-side script is separate — it just needs to `SELECT file_url FROM display_media ORDER BY created_at DESC LIMIT 1` on a polling loop.
+The Pi-side daemon is in `pi/common/display_media.py`; per-display install kits are in `pi/display-1/` and `pi/display-2/` (see `pi/README.md`).

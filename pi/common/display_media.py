@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
 Raspberry Pi fullscreen media display daemon.
-Connects to Supabase, fetches the latest row from display_media,
+Connects to Supabase, fetches the latest row from this display's media table,
 downloads and plays it via mpv, then polls for changes.
+
+Which display this Pi is: DISPLAY_ID in .env (default 1). Display 1 uses the
+original `display_media` table; display N uses `display_media_N`. Heartbeat and
+volume live in pi_status / pi_settings under row id = DISPLAY_ID.
 Assets flagged cache_locally are stored in CACHE_DIR and survive reboots.
 Falls back to the most recent cached file when Supabase is unreachable.
 """
@@ -42,6 +46,11 @@ POLL_INTERVAL: int = int(os.getenv("POLL_INTERVAL", "5"))
 HEARTBEAT_INTERVAL: int = int(os.getenv("HEARTBEAT_INTERVAL", "60"))
 CACHE_DIR = Path(os.getenv("CACHE_DIR", "/home/pi/display_media/cache"))
 
+# Identity of this physical display. Set per-Pi in .env; never change it on a
+# device that is already in the field.
+DISPLAY_ID: int = int(os.getenv("DISPLAY_ID", "1"))
+MEDIA_TABLE: str = "display_media" if DISPLAY_ID == 1 else f"display_media_{DISPLAY_ID}"
+
 _VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".ts"}
 
 
@@ -62,7 +71,7 @@ def _update_heartbeat(supabase: Client) -> None:
     """Upsert pi_status.last_seen so the web app knows the Pi is alive."""
     try:
         supabase.table("pi_status").upsert({
-            "id": 1,
+            "id": DISPLAY_ID,
             "last_seen": datetime.now(timezone.utc).isoformat(),
         }).execute()
     except Exception as exc:
@@ -72,7 +81,7 @@ def _update_heartbeat(supabase: Client) -> None:
 def _mark_downloaded(supabase: Client, media_id: str) -> None:
     """Flag that this asset's bytes reached the Pi and started playing."""
     try:
-        supabase.table("display_media").update({
+        supabase.table(MEDIA_TABLE).update({
             "pi_downloaded_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", media_id).execute()
     except Exception as exc:
@@ -85,7 +94,7 @@ def _fetch_volume(supabase: Client) -> Optional[float]:
         result = (
             supabase.table("pi_settings")
             .select("volume")
-            .eq("id", 1)
+            .eq("id", DISPLAY_ID)
             .single()
             .execute()
         )
@@ -117,7 +126,7 @@ def _apply_volume(value: float) -> None:
 
 def _fetch_recent(supabase: Client, limit: int = 10) -> list:
     result = (
-        supabase.table("display_media")
+        supabase.table(MEDIA_TABLE)
         .select("id, file_url, created_at, cache_locally")
         .order("created_at", desc=True)
         .limit(limit)
@@ -310,7 +319,8 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
 
-    log.info("Started. Polling every %ds.", POLL_INTERVAL)
+    log.info("Started as display %d (table %s). Polling every %ds.",
+             DISPLAY_ID, MEDIA_TABLE, POLL_INTERVAL)
 
     while True:
         # Heartbeat on its own cadence, independent of the media poll and of

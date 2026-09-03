@@ -1,0 +1,18 @@
+# systemd *user* unit for the display daemon.
+# Installed by setup.sh to ~/.config/systemd/user/display-media.service
+# Runs inside the desktop session so mpv can reach the Wayland/X display.
+[Unit]
+Description=MRI display media daemon
+After=graphical-session.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/display_media
+EnvironmentFile=%h/display_media/.env
+ExecStart=%h/display_media/venv/bin/python %h/display_media/display_media.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
