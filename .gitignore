@@ -20,3 +20,6 @@ npm-debug.log*
 
 # TS incremental build info
 *.tsbuildinfo
+
+# Supabase CLI link state
+supabase/.temp/
