@@ -47,6 +47,15 @@ from that number:
 - On the Pi: `systemctl --user status display-media` and
   `tail -f /tmp/display_media.log` (first line prints the display id and table).
 
+## Device notes
+
+- **Pi 2** (installed 2026-09-03): Pi 4 Model B, Debian 13 (trixie), hostname
+  `helmetpetB`, labwc/Wayland. `sudo` asks for the `pi` password on this image,
+  so `deploy.sh` (which runs `setup.sh` over `ssh -t`) will prompt once. It is
+  not on Tailscale yet; `mri-pi-2` in `~/.ssh/config` points at its LAN IP.
+  No WM8960 card was detected (only HDMI + headphone jack): if the audio HAT is
+  fitted, enable `dtoverlay=wm8960-soundcard` in `/boot/firmware/config.txt`.
+
 ## Notes
 
 - Never change `DISPLAY_ID` on a Pi that is already installed; it would start
